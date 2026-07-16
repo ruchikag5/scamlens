@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", var(--font-sans);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Custom palette colors for ScamLens mint/pale green trust theme */
+  --color-mint-50: #f0fdf4;
+  --color-mint-100: #dcfce7;
+  --color-mint-200: #bbf7d0;
+  --color-mint-300: #86efac;
+  --color-mint-400: #4ade80;
+  --color-mint-500: #22c55e;
+  --color-mint-600: #16a34a;
+  --color-mint-700: #15803d;
+  --color-mint-800: #166534;
+  --color-mint-900: #14532d;
+  --color-mint-950: #052e16;
+
+  --color-pastel-bg: #f5f8f6;
+  --color-pastel-card: #ffffff;
+  --color-pastel-border: #e2ece7;
+  --color-pastel-text: #1c2b24;
+}
+
+body {
+  background-color: var(--color-pastel-bg);
+  color: var(--color-pastel-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom fade-in and slide-up animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

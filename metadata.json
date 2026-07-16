@@ -1,0 +1,6 @@
+{
+  "name": "ScamLens",
+  "description": "An AI-powered scam message detector helping students and everyday internet users identify suspicious texts, emails, listings, and screenshots.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
