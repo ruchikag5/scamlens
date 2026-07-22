@@ -21,6 +21,8 @@ import FollowUpAssistant from "./components/FollowUpAssistant";
 import { DEMO_SAMPLES } from "./demoData";
 import { ScamCategory, ScamAnalysis, FollowUpMessage } from "./types";
 
+const FEEDBACK_FORM_URL = "https://forms.gle/sr8Pm8k9JGTG1gkj7";
+
 export default function App() {
   const [inputMode, setInputMode] = useState<"text" | "screenshot">("text");
   const [category, setCategory] = useState<ScamCategory>("job");
@@ -49,41 +51,6 @@ export default function App() {
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [analysis]);
-
-  // Feedback states
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedbackWho, setFeedbackWho] = useState("student");
-  const [feedbackAbout, setFeedbackAbout] = useState("");
-  const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
-
-  const handleFeedbackSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!feedbackText.trim()) return;
-
-    const feedbackObj = {
-      who: feedbackWho,
-      about: feedbackAbout,
-      text: feedbackText,
-      timestamp: new Date().toISOString()
-    };
-
-    const existing = JSON.parse(localStorage.getItem("scamlens_feedback") || "[]");
-    existing.push(feedbackObj);
-    localStorage.setItem("scamlens_feedback", JSON.stringify(existing));
-
-    setFeedbackSubmitted(true);
-  };
-
-  const handleCloseFeedback = () => {
-    setShowFeedbackModal(false);
-    setTimeout(() => {
-      setFeedbackSubmitted(false);
-      setFeedbackWho("student");
-      setFeedbackAbout("");
-      setFeedbackText("");
-    }, 300);
-  };
 
   // Categories list
   const CATEGORIES: { value: ScamCategory; label: string; icon: string; desc: string }[] = [
@@ -599,142 +566,18 @@ export default function App() {
 
         {/* Share Your Feedback section */}
         <div className="mt-12 flex justify-center pb-8 animate-fade-in-up">
-          <button 
-            onClick={() => setShowFeedbackModal(true)}
+          <a
+            href={FEEDBACK_FORM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 hover:text-emerald-950 text-xs font-semibold rounded-full border border-emerald-100/60 shadow-3xs hover:shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 active:translate-y-0"
           >
             <MessageSquareText className="w-4 h-4 text-emerald-600" />
             <span>Please share your valuable feedback</span>
-          </button>
+          </a>
         </div>
 
       </div>
-
-      {/* Feedback Modal Overlay */}
-      {showFeedbackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-emerald-950/40 backdrop-blur-xs transition-all duration-300">
-          <div className="relative bg-white rounded-2xl border border-pastel-border max-w-md w-full shadow-2xl p-6 overflow-hidden animate-fade-in-up">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-pastel-border/60 mb-5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-                  <MessageSquareText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-display font-extrabold text-base text-emerald-950">
-                    Share Your Feedback
-                  </h4>
-                  <p className="text-[10px] font-mono text-pastel-text/50">
-                    Help us improve ScamLens
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleCloseFeedback}
-                className="p-1.5 hover:bg-red-50 hover:text-red-600 text-pastel-text/40 rounded-lg transition-colors cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
-
-            {feedbackSubmitted ? (
-              /* Success view */
-              <div className="text-center py-6 space-y-4">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h5 className="font-display font-bold text-emerald-950 text-sm">
-                    Feedback Received!
-                  </h5>
-                  <p className="text-xs text-pastel-text/60 mt-2 leading-relaxed">
-                    Thank you for sharing your valuable input. Your perspective helps us build a more secure internet for students and community members.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCloseFeedback}
-                  className="w-full mt-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-3xs"
-                >
-                  Close Panel
-                </button>
-              </div>
-            ) : (
-              /* Feedback form */
-              <form onSubmit={handleFeedbackSubmit} className="space-y-4.5">
-                
-                {/* Who you are */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-pastel-text/60">
-                    Who are you?
-                  </label>
-                  <select
-                    value={feedbackWho}
-                    onChange={(e) => setFeedbackWho(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-pastel-bg hover:bg-pastel-bg/85 text-xs text-pastel-text rounded-xl border border-pastel-border focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="Student">Student</option>
-                    <option value="Working Individual">Working Individual</option>
-                    <option value="Regular Internet User">Regular Internet User</option>
-                    <option value="Older Individual">Older Individual</option>
-                    <option value="Other user">Other User</option>
-                  </select>
-                </div>
-
-                {/* What is this about */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-pastel-text/60">
-                    What is this about?
-                  </label>
-                  <input
-                    type="text"
-                    value={feedbackAbout}
-                    onChange={(e) => setFeedbackAbout(e.target.value)}
-                    placeholder="e.g. Remote work scam check, visual UI feedback..."
-                    required
-                    className="w-full px-3 py-2.5 bg-pastel-bg hover:bg-pastel-bg/80 focus:bg-white text-xs text-pastel-text placeholder:text-pastel-text/40 rounded-xl border border-pastel-border focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
-                  />
-                </div>
-
-                {/* Feedback Box */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-pastel-text/60">
-                    Feedback
-                  </label>
-                  <textarea
-                    value={feedbackText}
-                    onChange={(e) => setFeedbackText(e.target.value)}
-                    placeholder="Write your feedback details here. What features should we add? Is anything broken?"
-                    rows={4}
-                    required
-                    className="w-full p-3 bg-pastel-bg hover:bg-pastel-bg/80 focus:bg-white text-xs text-pastel-text placeholder:text-pastel-text/40 rounded-xl border border-pastel-border focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all resize-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2.5 pt-3 border-t border-pastel-border/60 mt-4">
-                  <button
-                    type="button"
-                    onClick={handleCloseFeedback}
-                    className="flex-1 py-2.5 bg-pastel-bg hover:bg-pastel-bg/80 text-pastel-text text-xs font-bold rounded-xl border border-pastel-border transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-3xs hover:shadow-2xs"
-                  >
-                    Submit Feedback
-                  </button>
-                </div>
-              </form>
-            )}
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }
