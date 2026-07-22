@@ -60,15 +60,22 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000)
     } catch (error: any) {
       attempt++;
       const errorMsg = error.message || "";
-      const isTransient = 
-        error.status === 503 || 
-        errorMsg.includes("503") || 
-        error.status === 429 || 
-        errorMsg.includes("429") || 
-        errorMsg.includes("high demand") || 
-        errorMsg.includes("temporarily") ||
+      const isImmediateFail =
+        error.status === 503 ||
+        error.status === 429 ||
+        errorMsg.includes("503") ||
+        errorMsg.includes("429") ||
+        errorMsg.includes("RESOURCE_EXHAUSTED") ||
+        errorMsg.toLowerCase().includes("quota") ||
         errorMsg.includes("UNAVAILABLE");
-      
+      const isTransient =
+        errorMsg.includes("high demand") ||
+        errorMsg.includes("temporarily");
+
+      if (isImmediateFail) {
+        throw error;
+      }
+
       if (isTransient && attempt < retries) {
         console.warn(`[ScamLens Retry] Attempt ${attempt} failed with transient error: "${errorMsg}". Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -79,6 +86,20 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000)
     }
   }
   throw new Error("Max API retries exceeded.");
+}
+
+// Simple timeout wrapper for promises
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("Model call timed out")), ms);
+    p.then((res) => {
+      clearTimeout(id);
+      resolve(res);
+    }).catch((err) => {
+      clearTimeout(id);
+      reject(err);
+    });
+  });
 }
 
 // Local Heuristic Fallback Analysis Engine
@@ -259,23 +280,19 @@ You must return a structured JSON response matching the exact schema specified.
     };
 
     try {
-      response = await callWithRetry(async () => {
-        return await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: { parts },
-          config: generateConfig
-        });
-      });
+      response = await callWithRetry(() => withTimeout(client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: { parts },
+        config: generateConfig
+      }), 50000));
     } catch (primaryError: any) {
       console.warn("Primary model 'gemini-3.5-flash' failed or reported busy. Trying robust fallback model 'gemini-flash-latest'...", primaryError.message);
       try {
-        response = await callWithRetry(async () => {
-          return await client.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: { parts },
-            config: generateConfig
-          });
-        });
+        response = await callWithRetry(() => withTimeout(client.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: { parts },
+          config: generateConfig
+        }), 50000));
       } catch (fallbackError) {
         // Rethrow so that the heuristic generator catches it
         throw new Error("Both Gemini models reported transient errors under peak demand.");
@@ -344,21 +361,17 @@ Your instructions:
 
     let response;
     try {
-      response = await callWithRetry(async () => {
-        return await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: contextPrompt,
-        });
-      });
+      response = await callWithRetry(() => withTimeout(client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: contextPrompt,
+      }), 50000));
     } catch (primaryError: any) {
       console.warn("Primary model 'gemini-3.5-flash' busy for follow-up. Trying robust fallback model 'gemini-flash-latest'...", primaryError.message);
       try {
-        response = await callWithRetry(async () => {
-          return await client.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: contextPrompt,
-          });
-        });
+        response = await callWithRetry(() => withTimeout(client.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: contextPrompt,
+        }), 50000));
       } catch (fallbackError) {
         throw new Error("Both Gemini models reported transient errors under peak demand for follow-up.");
       }

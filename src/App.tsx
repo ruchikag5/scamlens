@@ -198,10 +198,14 @@ export default function App() {
     setFollowUpMessages(prev => [...prev, userMsg]);
     setIsFollowUpGenerating(true);
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 50000);
+
     try {
       const response = await fetch("/api/follow-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           question: questionText,
           originalText: inputMode === "text" ? textInput : "(Analyzed via screenshot)",
@@ -224,15 +228,20 @@ export default function App() {
       };
 
       setFollowUpMessages(prev => [...prev, assistantMsg]);
-    } catch (err) {
+    } catch (err: any) {
+      const assistantText = err.name === "AbortError"
+        ? "Sorry, the follow-up assistant took too long. Please try again in a moment."
+        : "Sorry, I had trouble responding. Please ensure your API key is correctly configured.";
+
       const errorMsg: FollowUpMessage = {
         id: `assistant-error-${Date.now()}`,
         sender: "assistant",
-        text: "Sorry, I had trouble responding. Please ensure your API key is correctly configured.",
+        text: assistantText,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
       setFollowUpMessages(prev => [...prev, errorMsg]);
     } finally {
+      window.clearTimeout(timeoutId);
       setIsFollowUpGenerating(false);
     }
   };
