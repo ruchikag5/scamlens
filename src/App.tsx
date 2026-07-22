@@ -310,18 +310,17 @@ export default function App() {
                         key={cat.value}
                         type="button"
                         onClick={() => setCategory(cat.value)}
-                        className={`p-3 text-left rounded-xl border transition-all cursor-pointer flex flex-col justify-between h-24 ${
+                        className={`p-3 text-left rounded-xl border transition-all cursor-pointer flex flex-col justify-center h-24 ${
                           isSelected
                             ? "bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500 shadow-2xs"
                             : "bg-pastel-bg/50 border-pastel-border hover:bg-pastel-bg hover:border-pastel-text/20"
                         }`}
                       >
-                        <span className="text-xl">{cat.icon}</span>
-                        <div>
-                          <div className="font-display font-bold text-xs leading-none">
+                        <div className="space-y-2">
+                          <div className="font-display font-semibold text-sm leading-tight">
                             {cat.label}
                           </div>
-                          <span className="text-[9px] text-pastel-text/50 block leading-tight mt-1 line-clamp-2">
+                          <span className="text-xs text-pastel-text/60 block leading-snug mt-0.5 line-clamp-2">
                             {cat.desc}
                           </span>
                         </div>
