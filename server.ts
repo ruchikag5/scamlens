@@ -327,6 +327,37 @@ We analyzed your uploaded screenshot using our secondary local scan rules. Legit
 // API Route: Follow-up Assistant
 app.post("/api/follow-up", async (req: express.Request, res: express.Response) => {
   const { question, originalText, originalCategory, previousAnalysis } = req.body;
+  // If the client requests an immediate local fallback (for example after a client-side timeout),
+  // generate and return a tailored local answer using the existing analysis context.
+  if (req.body?.forceLocalFallback) {
+    const fallbackText = (function genLocal(questionText: string, prev: any) {
+      const q = (questionText || "").toLowerCase();
+      const prevSafeReply = prev?.safeReply || "";
+      const prevSafeNextSteps = Array.isArray(prev?.safeNextSteps) ? prev.safeNextSteps : [];
+      const prevRedFlags = Array.isArray(prev?.redFlags) ? prev.redFlags : [];
+      const prevSummary = prev?.summary || "";
+      const prevRiskLevel = prev?.riskLevel || "";
+
+      if (q.includes("how should i reply") || q.includes("reply") || q.includes("respond")) {
+        return prevSafeReply || "We recommend a cautious, minimal reply: don't disclose personal details, verify the sender independently, and avoid sending money or codes.";
+      }
+      if (q.includes("top 3") || q.includes("flags") || q.includes("warning")) {
+        return prevRedFlags.length > 0 ? `Top flags: ${prevRedFlags.slice(0,3).join(', ')}.` : "Common red flags: urgency, requests for money, and suspicious links or channels.";
+      }
+      if (q.includes("why is this risky") || q.includes("why risky") || q.includes("risk")) {
+        return (prevSummary || "This message shows multiple scam indicators.") + (prevRiskLevel ? ` (${prevRiskLevel})` : "") + (prev?.explanation ? `\n\n${prev.explanation}` : "");
+      }
+      if (q.includes("what should i check") || q.includes("verify") || q.includes("check")) {
+        return prevSafeNextSteps.length > 0 ? `Suggested checks:\n- ${prevSafeNextSteps.join('\n- ')}` : "Check the sender's official website, verify phone numbers from official channels, and avoid using contact information supplied in the suspicious message.";
+      }
+
+      // Generic enriched fallback
+      return prevSummary || `You asked: \"${questionText}\". Treat the message as suspicious: don't click links, don't send money, and verify the sender independently.`;
+    })(question, previousAnalysis);
+
+    res.json({ answer: `${fallbackText}\n\n*(Note: Local fallback provided due to AI service unavailability.)*`, isFallback: true });
+    return;
+  }
   
   try {
     const client = getAi();
@@ -388,43 +419,55 @@ Your instructions:
     
     const qNorm = (question || "").toLowerCase();
     let localAnswer = "";
-    
-    // Check specific question types first
-    if (qNorm.includes("why is this risky") || qNorm.includes("risk")) {
-      localAnswer = "This message is risky because it exhibits classic psychological triggers designed to bypass your logical guardrails. The combination of urgent deadlines, unverified contact channels, and demands for advance action are hallmark signs of bad actors.";
-    } else if (qNorm.includes("what should i check") || qNorm.includes("check") || qNorm.includes("verify")) {
-      localAnswer = "To verify, you should:\n1. Search for the sender's name or company on LinkedIn or official directory systems.\n2. Look up the sender's email domain on 'who.is' to see if it was registered very recently.\n3. Make a phone call using a number listed publicly on the company's official corporate webpage (never use numbers provided in the suspicious message).";
-    } else if (qNorm.includes("how should i reply") || qNorm.includes("reply") || qNorm.includes("respond")) {
-      localAnswer = "We highly advise you **NOT** to reply. Replying lets the scammer know that your contact details (phone number or email address) are active and monitored by a real person. This flags you as a high-value target and will trigger more sophisticated, persistent phishing attempts in the future.";
-    } else if (qNorm.includes("safe to click") || qNorm.includes("click") || qNorm.includes("link")) {
-      localAnswer = "Absolutely not. Links in suspicious messages are designed to mimic real login interfaces (phishing) to steal your credentials, or they may automatically trigger malicious script downloads on your device. Always type the official web address manually in your browser address bar.";
-    } else if (qNorm.includes("top 3 red flags") || qNorm.includes("flags") || qNorm.includes("warning")) {
-      localAnswer = "The top 3 warning signs in this message are:\n1. **Artificial Pressure**: Creating a false sense of urgency (e.g., 'respond within 12 hours').\n2. **Platform Shifting**: Demanding that you migrate to external chat networks like Telegram or WhatsApp.\n3. **Financial Prerequisites**: Expecting you to pay upfront fees, secure deposits, or buy startup equipment yourself.";
-    }
-    
-    // Custom topic-based triggers if no direct match above or to enrich the reply
-    if (!localAnswer) {
-      if (qNorm.includes("zelle") || qNorm.includes("venmo") || qNorm.includes("apple") || qNorm.includes("money") || qNorm.includes("pay") || qNorm.includes("fee") || qNorm.includes("gift card") || qNorm.includes("check")) {
-        localAnswer = "When it comes to payments, keep these golden rules in mind:\n- Peer-to-peer apps (Venmo, Zelle, Apple Cash) act like physical cash. Once sent, there is no buyer protection or refund policy.\n- A common scam is sending a 'fake check' for equipment, asking you to wire the remaining amount. The bank eventually flags the check as fraudulent, and you are held legally responsible for the lost funds.\n- Legitimate brands and platforms will never request payment via gift cards or business upgrades.";
-      } else if (qNorm.includes("telegram") || qNorm.includes("whatsapp") || qNorm.includes("chat") || qNorm.includes("number") || qNorm.includes("text") || qNorm.includes("skype") || qNorm.includes("miller") || qNorm.includes("joseph")) {
-        localAnswer = "Scammers almost always try to shift the conversation off official hiring platforms (like Handshake, LinkedIn, or Indeed) onto personal messaging apps like Telegram, WhatsApp, or Skype. They do this because:\n1. It protects their fake accounts on the main platform from being banned.\n2. These messaging apps use encryption and temporary profiles, making them untraceable.\nAlways refuse out-of-channel communication.";
-      } else if (qNorm.includes("apartment") || qNorm.includes("rent") || qNorm.includes("landlord") || qNorm.includes("lease") || qNorm.includes("deposit") || qNorm.includes("sublet") || qNorm.includes("room")) {
-        localAnswer = "Rental and housing scams usually rely on a common script:\n- The 'landlord' claims to be out of the country (e.g., on a missionary, military, or medical trip) and cannot show you the property in person.\n- They demand a security deposit or first month's rent upfront in exchange for 'mailing you the keys'.\n- **Rule of thumb**: Never lease a place or send deposits without seeing the interior of the property in person with a verified agent.";
-      } else if (qNorm.includes("job") || qNorm.includes("employment") || qNorm.includes("work") || qNorm.includes("salary") || qNorm.includes("data entry") || qNorm.includes("assistant")) {
-        localAnswer = "Fake remote job offers are currently the most common scam targeting students:\n- They offer high hourly pay (e.g., $30+/hour) for basic, low-skill administrative or data entry work.\n- They bypass standard interview stages or use quick 'text-only' interviews.\n- They will ask you to buy office equipment using a check they mail you, which is counterfeit.\nVerify any job posting with your campus career services office before proceeding.";
-      } else if (qNorm.includes("netflix") || qNorm.includes("subscription") || qNorm.includes("alert") || qNorm.includes("support") || qNorm.includes("suspension") || qNorm.includes("frozen")) {
-        localAnswer = "Phishing alerts for subscriptions (like Netflix, Spotify, or banking alerts) are highly common:\n- They claim your account is frozen due to a 'billing error' or 'failed payment'.\n- They provide an urgent link to input your updated card credentials.\n- **Safest action**: Close the message, go directly to the service's official website, sign in manually, and check your actual account status there.";
-      } else if (qNorm.includes("giveaway") || qNorm.includes("won") || qNorm.includes("prize") || qNorm.includes("courier") || qNorm.includes("shipping") || qNorm.includes("instagram")) {
-        localAnswer = "Giveaway and prize scams are designed to trigger excitement to cloud your judgment:\n- They claim you have won a major raffle or high-value item, but you must pay a small 'delivery', 'processing', or 'courier insurance' fee first.\n- Once you pay the fee, the contact disappears and no prize is ever delivered.\n- Remember: If you have to pay to receive a 'free' prize, it's not a prize—it's a transaction scam.";
+    const prev = previousAnalysis || {};
+    const prevSafeReply = prev.safeReply || "";
+    const prevSafeNextSteps = Array.isArray(prev.safeNextSteps) ? prev.safeNextSteps : [];
+    const prevRedFlags = Array.isArray(prev.redFlags) ? prev.redFlags : [];
+    const prevSummary = prev.summary || "";
+    const prevRiskLevel = prev.riskLevel || "";
+
+    // Prefer contextualized answers using the previous analysis when available
+    if (qNorm.includes("how should i reply") || qNorm.includes("how do i reply") || qNorm.includes("how should i respond") || qNorm.includes("reply") || qNorm.includes("respond")) {
+      if (prevSafeReply) {
+        localAnswer = prevSafeReply;
       } else {
-        // Broad intelligent response reflecting the actual text context of their query
-        localAnswer = `You asked: "${question}". When analyzing threats like this, security professionals look for unverified senders, unusual communication methods, and non-standard payment requests. If the sender is rushing you, offering something too good to be true, or asking you to move to a private messaging application, it is highly likely to be a scam.`;
+        localAnswer = "We recommend a cautious, minimal reply that does not disclose any personal details. Verify the sender independently before engaging and avoid sending money or codes.";
+      }
+    } else if (qNorm.includes("top 3 red flags") || qNorm.includes("top 3") || qNorm.includes("flags") || qNorm.includes("warning")) {
+      if (prevRedFlags.length > 0) {
+        localAnswer = `Top flags: ${prevRedFlags.slice(0, 3).join(', ')}.`;
+      } else {
+        localAnswer = "Common red flags include urgency/pressure, requests for money, and unverified external links or channels.";
+      }
+    } else if (qNorm.includes("why is this risky") || qNorm.includes("why risky") || qNorm.includes("risk")) {
+      if (prevSummary || prevRiskLevel) {
+        localAnswer = `${prevSummary} (${prevRiskLevel || 'Risk info not specified'}).\n\n${prev.explanation || ''}`.trim();
+      } else {
+        localAnswer = "This message appears risky due to urgency, requests for payment, or requests for personal information—classic indicators of scams.";
+      }
+    } else if (qNorm.includes("what should i check") || qNorm.includes("what to check") || qNorm.includes("verify") || qNorm.includes("check")) {
+      if (prevSafeNextSteps.length > 0) {
+        localAnswer = `Suggested checks:\n- ${prevSafeNextSteps.join('\n- ')}`;
+      } else {
+        localAnswer = "Check the sender's official website, verify phone numbers from official channels, and avoid using contact information supplied in the suspicious message.";
       }
     }
 
-    res.json({ 
-      answer: `${localAnswer}\n\n*(Note: This tailored response was prepared by ScamLens Local Knowledge Base due to peak AI service demand.)*`, 
-      isFallback: true 
+    // If still empty, fall back to the previous broad local logic enriched by previousAnalysis
+    if (!localAnswer) {
+      // reuse existing topic-based heuristics where helpful
+      if (qNorm.includes("zelle") || qNorm.includes("venmo") || qNorm.includes("apple") || qNorm.includes("money") || qNorm.includes("pay") || qNorm.includes("fee") || qNorm.includes("gift card") || qNorm.includes("check")) {
+        localAnswer = "When it comes to payments, keep these golden rules in mind:\n- Peer-to-peer apps (Venmo, Zelle, Apple Cash) act like physical cash. Once sent, there is no buyer protection or refund policy.\n- A common scam is sending a 'fake check' for equipment, asking you to wire the remaining amount. The bank eventually flags the check as fraudulent, and you are held legally responsible for the lost funds.\n- Legitimate brands and platforms will never request payment via gift cards or business upgrades.";
+      } else if (qNorm.includes("telegram") || qNorm.includes("whatsapp") || qNorm.includes("chat") || qNorm.includes("number") || qNorm.includes("text") || qNorm.includes("skype")) {
+        localAnswer = "Scammers often shift conversations to personal messaging apps to avoid platform moderation. Refuse out-of-channel communication and verify identities via official channels.";
+      } else {
+        localAnswer = prevSummary || `You asked: "${question}". When in doubt, treat the message as suspicious: don't click links, don't send money, and verify the sender independently.`;
+      }
+    }
+
+    res.json({
+      answer: `${localAnswer}\n\n*(Note: This tailored response was prepared by ScamLens Local Knowledge Base due to peak AI service demand.)*`,
+      isFallback: true,
     });
   }
 });

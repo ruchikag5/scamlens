@@ -229,17 +229,59 @@ export default function App() {
 
       setFollowUpMessages(prev => [...prev, assistantMsg]);
     } catch (err: any) {
-      const assistantText = err.name === "AbortError"
-        ? "Sorry, the follow-up assistant took too long. Please try again in a moment."
-        : "Sorry, I had trouble responding. Please ensure your API key is correctly configured.";
+      // If the fetch was aborted by the client timeout, ask the server to return
+      // an immediate local fallback (which uses previousAnalysis) instead of
+      // showing the generic timeout message.
+      if (err?.name === "AbortError") {
+        try {
+          const fallbackResp = await fetch("/api/follow-up", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: questionText,
+              originalText: inputMode === "text" ? textInput : "(Analyzed via screenshot)",
+              originalCategory: category,
+              previousAnalysis: analysis,
+              forceLocalFallback: true
+            })
+          });
 
-      const errorMsg: FollowUpMessage = {
-        id: `assistant-error-${Date.now()}`,
-        sender: "assistant",
-        text: assistantText,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      };
-      setFollowUpMessages(prev => [...prev, errorMsg]);
+          if (fallbackResp.ok) {
+            const data = await fallbackResp.json();
+            const assistantMsg: FollowUpMessage = {
+              id: `assistant-${Date.now()}`,
+              sender: "assistant",
+              text: data.answer,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            };
+            setFollowUpMessages(prev => [...prev, assistantMsg]);
+          } else {
+            const errorMsg: FollowUpMessage = {
+              id: `assistant-error-${Date.now()}`,
+              sender: "assistant",
+              text: "Sorry, the follow-up assistant took too long. Please try again in a moment.",
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            };
+            setFollowUpMessages(prev => [...prev, errorMsg]);
+          }
+        } catch (fallbackErr) {
+          const errorMsg: FollowUpMessage = {
+            id: `assistant-error-${Date.now()}`,
+            sender: "assistant",
+            text: "Sorry, the follow-up assistant took too long. Please try again in a moment.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          };
+          setFollowUpMessages(prev => [...prev, errorMsg]);
+        }
+      } else {
+        const errorMsg: FollowUpMessage = {
+          id: `assistant-error-${Date.now()}`,
+          sender: "assistant",
+          text: "Sorry, I had trouble responding. Please ensure your API key is correctly configured.",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        };
+        setFollowUpMessages(prev => [...prev, errorMsg]);
+      }
     } finally {
       window.clearTimeout(timeoutId);
       setIsFollowUpGenerating(false);
